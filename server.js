@@ -48,3 +48,44 @@ app.post('/api/buy-airtime', async (req, res) => {
 app.get('/', (req, res) => res.json({ status: 'Sauri Mega Backend is LIVE' }));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log('Running on ' + PORT));
+
+
+// ===== ADMIN SAURI MEGA =====
+let commandes = [];
+let nextId = 1;
+const ADMIN_CODE = "96350559";
+function checkAdmin(req,res,next){
+  const code = req.headers['x-admin-code'] || req.query.code;
+  if(code !== ADMIN_CODE) return res.status(401).json({error:"Code admin incorrect"});
+  next();
+}
+app.post('/commande', (req,res)=>{
+  const {num, op, amt, type} = req.body;
+  if(!num || !amt) return res.status(400).json({error:"num et amt requis"});
+  const c = { id: nextId++, num: String(num).replace(/\D/g,"").slice(-8), op: op || "Airtel Niger", amt: amt, type: type || "CREDIT", status: "En attente", date: new Date().toLocaleString("fr-FR") };
+  commandes.unshift(c);
+  res.json({success:true, commande:c});
+});
+app.get('/mes-commandes/:num', (req,res)=>{
+  const clean = String(req.params.num).replace(/\D/g,"").slice(-8);
+  res.json(commandes.filter(c=>c.num===clean));
+});
+app.get('/admin/commandes', checkAdmin, (req,res)=>{ res.json(commandes); });
+app.delete('/admin/commande/:id', checkAdmin, (req,res)=>{
+  const id = Number(req.params.id);
+  const avant = commandes.length;
+  commandes = commandes.filter(c=>c.id!==id);
+  if(commandes.length===avant) return res.status(404).json({error:"Introuvable"});
+  res.json({success:true});
+});
+app.delete('/admin/commandes-en-attente', checkAdmin, (req,res)=>{
+  const nb = commandes.filter(c=>c.status==="En attente").length;
+  commandes = commandes.filter(c=>c.status!=="En attente");
+  res.json({success:true, supprime:nb});
+});
+app.post('/admin/valider/:id', checkAdmin, (req,res)=>{
+  const c = commandes.find(x=>x.id===Number(req.params.id));
+  if(!c) return res.status(404).json({error:"Introuvable"});
+  c.status = req.body.status || "Validé";
+  res.json({success:true, commande:c});
+});
